@@ -61,7 +61,7 @@ class PointerNet(NamedTuple):
 class NCO(NamedTuple):
     ...
 
-# ---
+# -----------
 
 # TODO
 def reward(solution):
