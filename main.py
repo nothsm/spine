@@ -6,6 +6,30 @@ import numpy.typing as npt
 
 # ---------------------------------- models ------------------------------------
 
+class RNNCell(NamedTuple):
+    wx: npt.NDArray[np.float32]
+    wh: npt.NDArray[np.float32]
+
+def rnncellnew(input_dim, hidden_dim):
+    wx = np.random.normal(size=(input_dim, hidden_dim)) # TODO: Use better init
+    wh = np.random.normal(size=(hidden_dim, hidden_dim))
+    return RNNCell(wx, wh)
+
+# TODO: Play with this activation
+# Note: If any of the entries is large, tanh makes it go to 1
+def rnncellfwd(cell, xt, prevh):
+    (wx, wh) = cell
+    ht = np.tanh(np.matmul(xt, wx) + np.matmul(prevh, wh)) # TODO: Why backwards?
+    return ht
+
+class RNN(NamedTuple):
+    Wx: npt.NDArray[np.float32]
+    Wh: npt.NDArray[np.float32]
+    b:  npt.NDArray[np.float32]
+
+def rnnfwd(rnn: RNN):
+    ...
+
 # TODO
 class MyDataset(NamedTuple):
     ...
