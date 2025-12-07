@@ -1,4 +1,5 @@
 import math
+import time
 from functools import partial
 from typing import TypedDict 
 
@@ -25,7 +26,7 @@ def load_donut(ntrain=32, ntest=8, r=0.5):
     y_test = np.array([1. if math.sqrt(x[0]**2 + x[1]**2) < r else -1. for x in X_test.tolist()])
     return X_train, y_train, X_test, y_test
 
-def load_regression(ntrain=32, ntest=8, input_dim=2, return_true=False):
+def load_regression(ntrain=32, ntest=8, input_dim=2, return_params=False):
     true_params = np.random.normal(size=(input_dim,))
 
     eps_train = 1e-2 * np.random.normal(size=(ntrain,))
@@ -36,14 +37,14 @@ def load_regression(ntrain=32, ntest=8, input_dim=2, return_true=False):
     X_test = np.random.normal(size=(ntest, input_dim))
     y_test = (X_test @ true_params) + eps_test
 
-    if return_true:
+    if return_params:
         return X_train, y_train, X_test, y_test, true_params
     else:
         return X_train, y_train, X_test, y_test
     
-def load_tanh(ntrain=32, ntest=8, input_dim=2, return_true=False):
-    tmp = load_regression(ntrain=ntrain, ntest=ntest, input_dim=input_dim, return_true=return_true)
-    if return_true:
+def load_tanh(ntrain=32, ntest=8, input_dim=2, return_params=False):
+    tmp = load_regression(ntrain=ntrain, ntest=ntest, input_dim=input_dim, return_params=return_params)
+    if return_params:
         X_train, y_train, X_test, y_test, true_params = tmp
         y_train = np.tanh(y_train)
         y_test = np.tanh(y_test)
@@ -74,21 +75,38 @@ def sgdupdate(sgd, params, grads):
     return tree_map(lambda param, grad: sgdupdate1(sgd, param, grad), params, grads) 
 
 def sgdsolve(sgd, model, X, y, nstep=10, print_every=None):
-    (fwd, params) = model # params <=> cell
+    (fwd, params) = model
+    mx.eval(params)
 
+    # pre: ypreds.shape == y.shape
     def mse(params, X, y):
-        ypreds = fwd(params, X) # TODO: parameterize this
+        ypreds = fwd(params, X)
         lossval = (ypreds - y).square().mean()
         return lossval
-
+    
     loss_and_grad_fn = mx.value_and_grad(mse)
-    for i in range(nstep): # TODO: increase this
+
+    # @mx.compile
+    def step(params, X, y):
         loss, grads = loss_and_grad_fn(params, X, y)
-        params = sgdupdate(sgd, params, grads) # TODO: I don't like that this allocates
-        mx.eval(loss, params) # TODO: Why do I need this?
+        params = sgdupdate(sgd, params, grads)
+        return params, loss
+
+    metrics = {'loss': [], 'dt': []}
+    for i in range(nstep): # TODO: increase this
+        # train step
+        tic = time.perf_counter_ns()
+        params, loss = step(params, X, y)
+        mx.eval(loss, params)
+        toc = time.perf_counter_ns()
+        # save metrics
+        lossval = loss.item()
+        dt = toc - tic
+        metrics['loss'].append(lossval)
+        metrics['dt'].append(dt)
         if print_every is not None and (i % print_every) == 0:
-            print(f"step: {i} | loss: {loss.item():.5f}")
-    return params
+            print(f"step: {i} | loss: {lossval:.5f} | dt: {dt}ns")
+    return params, metrics
 
 
 # TODO
@@ -113,8 +131,9 @@ class RNNCell(TypedDict):
 def rnncellnew(input_dim, hidden_dim) -> RNNCell:
     assert hidden_dim == 1
 
+    # TODO: fix the output dim of wx
     wx = 1e-2 * mx.random.normal(shape=(input_dim,)) # TODO: Use better init
-    wh = 1e-2 * mx.random.normal(shape=(hidden_dim, hidden_dim)) # TODO: fix the output dim of wx
+    wh = 1e-2 * mx.random.normal(shape=(hidden_dim, hidden_dim)) 
     return RNNCell(wx=wx, wh=wh)
 
 def rnncellinit(cell, wx, wh):
