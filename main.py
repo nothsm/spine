@@ -28,7 +28,7 @@ def load_donut(ntrain=32, ntest=8, r=0.5):
 def load_sincos(nsamples=32):
     ...
 
-# --------------------------------- optimizers ---------------------------------
+# ----------------------------- optimizers/solvers -----------------------------
 
 class MySGD(TypedDict):
     lr: float
@@ -43,6 +43,23 @@ def sgdupdate1(sgd, param, grad):
 
 def sgdupdate(sgd, params, grads):
     return tree_map(lambda param, grad: sgdupdate1(sgd, param, grad), params, grads) 
+
+def sgdsolve(sgd, model, X, y):
+    (fwd, params) = model # params <=> cell
+
+    def mse(params, X, y):
+        ypreds = fwd(params, X) # TODO: parameterize this
+        lossval = (ypreds - y).square().mean()
+        return lossval
+
+    loss_and_grad_fn = mx.value_and_grad(mse)
+    for e in range(10): # TODO: increase this
+        loss, grads = loss_and_grad_fn(params, X, y)
+        params = sgdupdate(sgd, params, grads) # TODO: I don't like that this allocates
+        mx.eval(params) # TODO: Why do I need this?
+        print(loss)
+    return params
+
 
 # TODO
 class MyAdam(TypedDict):
@@ -64,15 +81,24 @@ class RNNCell(TypedDict):
     wh: Array 
 
 def rnncellnew(input_dim, hidden_dim) -> RNNCell:
-    wx = np.random.normal(size=(input_dim, hidden_dim)) # TODO: Use better init
-    wh = np.random.normal(size=(hidden_dim, hidden_dim))
+    wx = mx.random.normal(shape=(input_dim, hidden_dim)) # TODO: Use better init
+    wh = mx.random.normal(shape=(hidden_dim, hidden_dim))
     return RNNCell(wx=wx, wh=wh)
+
+def rnncellinit(cell, wx, wh):
+    cell['wx'] = mx.array(wx)
+    cell['wh'] = mx.array(wh)
 
 # TODO: Play with this activation
 # Note: If any of the entries is large, tanh makes it go to 1
-def rnncellfwd(cell, xt, hprev):
+def rnncellfwd(cell, xt, hprev=None):
     wx, wh = cell['wx'], cell['wh']
-    ht = np.tanh(np.matmul(xt, wx) + np.matmul(hprev, wh)) # TODO: Why are the matmuls transposed?
+
+    # TODO: Write this in a more concise way
+    if hprev is None:
+        hprev = mx.zeros(wh.shape[0])
+
+    ht = mx.tanh(mx.matmul(xt, wx) + mx.matmul(hprev, wh)) # TODO: Why are the matmuls transposed?
     return ht
 
 # TODO
