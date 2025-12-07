@@ -25,6 +25,35 @@ def load_donut(ntrain=32, ntest=8, r=0.5):
     y_test = np.array([1. if math.sqrt(x[0]**2 + x[1]**2) < r else -1. for x in X_test.tolist()])
     return X_train, y_train, X_test, y_test
 
+def load_regression(ntrain=32, ntest=8, input_dim=2, return_true=False):
+    true_params = np.random.normal(size=(input_dim,))
+
+    eps_train = 1e-2 * np.random.normal(size=(ntrain,))
+    X_train = np.random.normal(size=(ntrain, input_dim))
+    y_train = (X_train @ true_params) + eps_train
+
+    eps_test = 1e-2 * np.random.normal(size=(ntest,))
+    X_test = np.random.normal(size=(ntest, input_dim))
+    y_test = (X_test @ true_params) + eps_test
+
+    if return_true:
+        return X_train, y_train, X_test, y_test, true_params
+    else:
+        return X_train, y_train, X_test, y_test
+    
+def load_tanh(ntrain=32, ntest=8, input_dim=2, return_true=False):
+    tmp = load_regression(ntrain=ntrain, ntest=ntest, input_dim=input_dim, return_true=return_true)
+    if return_true:
+        X_train, y_train, X_test, y_test, true_params = tmp
+        y_train = np.tanh(y_train)
+        y_test = np.tanh(y_test)
+        return X_train, y_train, X_test, y_test, true_params
+    else:
+        X_train, y_train, X_test, y_test = tmp
+        y_train = np.tanh(y_train)
+        y_test = np.tanh(y_test)
+        return X_train, y_train, X_test, y_test
+
 def load_sincos(nsamples=32):
     ...
 
@@ -44,7 +73,7 @@ def sgdupdate1(sgd, param, grad):
 def sgdupdate(sgd, params, grads):
     return tree_map(lambda param, grad: sgdupdate1(sgd, param, grad), params, grads) 
 
-def sgdsolve(sgd, model, X, y):
+def sgdsolve(sgd, model, X, y, nstep=10, print_every=None):
     (fwd, params) = model # params <=> cell
 
     def mse(params, X, y):
@@ -53,11 +82,12 @@ def sgdsolve(sgd, model, X, y):
         return lossval
 
     loss_and_grad_fn = mx.value_and_grad(mse)
-    for e in range(10): # TODO: increase this
+    for i in range(nstep): # TODO: increase this
         loss, grads = loss_and_grad_fn(params, X, y)
         params = sgdupdate(sgd, params, grads) # TODO: I don't like that this allocates
-        mx.eval(params) # TODO: Why do I need this?
-        print(loss)
+        mx.eval(loss, params) # TODO: Why do I need this?
+        if print_every is not None and (i % print_every) == 0:
+            print(f"step: {i} | loss: {loss.item():.5f}")
     return params
 
 
@@ -81,8 +111,10 @@ class RNNCell(TypedDict):
     wh: Array 
 
 def rnncellnew(input_dim, hidden_dim) -> RNNCell:
-    wx = mx.random.normal(shape=(input_dim, hidden_dim)) # TODO: Use better init
-    wh = mx.random.normal(shape=(hidden_dim, hidden_dim))
+    assert hidden_dim == 1
+
+    wx = 1e-2 * mx.random.normal(shape=(input_dim,)) # TODO: Use better init
+    wh = 1e-2 * mx.random.normal(shape=(hidden_dim, hidden_dim)) # TODO: fix the output dim of wx
     return RNNCell(wx=wx, wh=wh)
 
 def rnncellinit(cell, wx, wh):
@@ -103,8 +135,6 @@ def rnncellfwd(cell, xt, hprev=None):
 
 # TODO
 def rnncellbwd(cell, dht, cache):
-    wx, wh = cell['wx'], cell['wh']
-    (xt, prevh, ht) = cache
     ...
 
 class RNN(TypedDict):
