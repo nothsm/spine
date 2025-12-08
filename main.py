@@ -1,7 +1,7 @@
 import math
 import time
 from functools import partial
-from typing import TypedDict
+from typing import Any, TypedDict
 
 import mlx.core as mx
 from mlx.utils import tree_map
@@ -11,18 +11,20 @@ import numpy.typing as npt
 
 # -------------------------------- type alias ----------------------------------
 
-Array = npt.NDArray[np.float32]
+Array = mx.array
+NPArray = npt.NDArray[Any] # TODO: tighten this
+Dataset = tuple[NPArray, NPArray, NPArray, NPArray]
 
 # ---------------------------------- datasets ----------------------------------
 
-def load_bixor(nsamples=32):
+def load_bixor(n_samples: int = 32):
     ...
 
 # TODO: Return a dict here?
-def load_donut(ntrain=32, ntest=8, r=0.5):
-    X_train = np.random.uniform(-1, 1, size=(ntrain, 2))
+def load_donut(n_train: int = 32, n_test: int = 8, r: float = 0.5) -> Dataset:
+    X_train = np.random.uniform(-1, 1, size=(n_train, 2))
     y_train = np.array([1. if math.sqrt(x[0]**2 + x[1]**2) < r else -1. for x in X_train.tolist()])
-    X_test = np.random.uniform(-1, 1, size=(ntest, 2))
+    X_test = np.random.uniform(-1, 1, size=(n_test, 2))
     y_test = np.array([1. if math.sqrt(x[0]**2 + x[1]**2) < r else -1. for x in X_test.tolist()])
     return X_train, y_train, X_test, y_test
 
@@ -71,10 +73,10 @@ def sgdupdate1(sgd, param, grad):
     lr = sgd['lr']
     return param - lr * grad
 
-def sgdupdate(sgd, params, grads):
+def sgdupdate(sgd: MySGD, params, grads):
     return tree_map(lambda param, grad: sgdupdate1(sgd, param, grad), params, grads)
 
-def sgdsolve(sgd, model, X, y, nstep=10, print_every=None):
+def sgdsolve(sgd, model, X, y, batch_size, n_epochs=10, print_every=None):
     (fwd, params) = model
     mx.eval(params)
 
@@ -86,26 +88,38 @@ def sgdsolve(sgd, model, X, y, nstep=10, print_every=None):
 
     loss_and_grad_fn = mx.value_and_grad(mse)
 
-    # @mx.compile
+    @mx.compile
     def step(params, X, y):
         loss, grads = loss_and_grad_fn(params, X, y)
         params = sgdupdate(sgd, params, grads)
         return params, loss
 
-    metrics = {'loss': [], 'dt': []}
-    for i in range(nstep): # TODO: increase this
-        # train step
-        tic = time.perf_counter_ns()
-        params, loss = step(params, X, y)
-        mx.eval(loss, params)
-        toc = time.perf_counter_ns()
-        # save metrics
-        lossval = loss.item()
-        dt = toc - tic
-        metrics['loss'].append(lossval)
-        metrics['dt'].append(dt)
-        if print_every is not None and (i % print_every) == 0:
-            print(f"step: {i} | loss: {lossval:.5f} | dt: {dt}ns")
+    def batch_iterate(batch_size, X, y):
+        perm = mx.array(np.random.permutation(y.size))
+        for i in range(0, y.size, batch_size):
+            ixs = perm[i:i + batch_size]
+            yield X[ixs], y[ixs]
+
+    steps, metrics = 0, []
+    for e in range(n_epochs): # TODO: increase this
+        for X_, y_ in batch_iterate(batch_size, X, y): # TODO: Doesn't this have overhead?
+            # train step
+            tic = time.perf_counter_ns()
+
+            params, loss = step(params, X_, y_)
+            mx.eval(loss, params)
+
+            toc = time.perf_counter_ns()
+
+            steps += 1
+
+            # save metrics
+            step_loss, step_dt = loss.item(), toc - tic
+            metrics.append({'loss': step_loss, 'dt': step_dt})
+            if print_every and (steps % print_every) == 0:
+                print(f"step: {steps} | epoch: {e} | loss: {step_loss:.5f} | dt: {step_dt}ns")
+    # metrics.update({'losses': [metric['loss'] for metric in metrics],
+    #                 'dts': [metric['dt'] for metric in metrics]})
     return params, metrics
 
 
@@ -131,23 +145,19 @@ class RNNCell(TypedDict):
 def rnncellnew(input_dim, hidden_dim) -> RNNCell:
     assert hidden_dim == 1
 
-    # TODO: fix the output dim of wx
     wx = 1e-2 * mx.random.normal(shape=(input_dim,)) # TODO: Use better init
     wh = 1e-2 * mx.random.normal(shape=(hidden_dim, hidden_dim))
     return RNNCell(wx=wx, wh=wh)
 
 def rnncellinit(cell, wx, wh):
-    cell['wx'] = mx.array(wx)
-    cell['wh'] = mx.array(wh)
+    cell['wx'], cell['wh'] = mx.array(wx), mx.array(wh)
 
 # TODO: Play with this activation
 # Note: If any of the entries is large, tanh makes it go to 1
 def rnncellfwd(cell, xt, hprev=None):
     wx, wh = cell['wx'], cell['wh']
 
-    # TODO: Write this in a more concise way
-    if hprev is None:
-        hprev = mx.zeros(wh.shape[0])
+    hprev = hprev or mx.zeros(wh.shape[0]) # TODO: how does this interact with compilation?
 
     ht = mx.tanh(mx.matmul(xt, wx) + mx.matmul(hprev, wh)) # TODO: Why are the matmuls transposed?
     return ht
@@ -159,9 +169,10 @@ def rnncellbwd(cell, dht, cache):
 class RNN(TypedDict):
     cell: RNNCell
 
-def rnnnew(input_dim, hidden_dim):
-    cell = rnncellnew(input_dim, hidden_dim)
-    return RNN(cell)
+def rnnnew(input_dim: int, hidden_dim: int) -> RNN:
+    cell = rnncellnew(input_dim=input_dim,
+                      hidden_dim=hidden_dim)
+    return RNN(cell=cell)
 
 # TODO
 def rnnfwd(rnn: RNN, xs, h0):
