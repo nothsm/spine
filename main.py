@@ -86,26 +86,27 @@ def sgdsolve(sgd, model, X, y, nstep=10, print_every=None):
     
     loss_and_grad_fn = mx.value_and_grad(mse)
 
-    # @mx.compile
+    @mx.compile
     def step(params, X, y):
         loss, grads = loss_and_grad_fn(params, X, y)
         params = sgdupdate(sgd, params, grads)
         return params, loss
 
-    metrics = {'loss': [], 'dt': []}
+    metrics = [] 
     for i in range(nstep): # TODO: increase this
         # train step
         tic = time.perf_counter_ns()
+
         params, loss = step(params, X, y)
         mx.eval(loss, params)
+
         toc = time.perf_counter_ns()
+
         # save metrics
-        lossval = loss.item()
-        dt = toc - tic
-        metrics['loss'].append(lossval)
-        metrics['dt'].append(dt)
-        if print_every is not None and (i % print_every) == 0:
-            print(f"step: {i} | loss: {lossval:.5f} | dt: {dt}ns")
+        step_loss, step_dt = loss.item(), toc - tic
+        metrics.append({'loss': step_loss, 'dt': step_dt})
+        if print_every and (i % print_every) == 0:
+            print(f"step: {i} | loss: {step_loss:.5f} | dt: {step_dt}ns")
     return params, metrics
 
 
