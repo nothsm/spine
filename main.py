@@ -1,7 +1,7 @@
 import math
 import time
 from functools import partial
-from typing import TypedDict 
+from typing import TypedDict
 
 import mlx.core as mx
 from mlx.utils import tree_map
@@ -41,7 +41,7 @@ def load_regression(ntrain=32, ntest=8, input_dim=2, return_params=False):
         return X_train, y_train, X_test, y_test, true_params
     else:
         return X_train, y_train, X_test, y_test
-    
+
 def load_tanh(ntrain=32, ntest=8, input_dim=2, return_params=False):
     tmp = load_regression(ntrain=ntrain, ntest=ntest, input_dim=input_dim, return_params=return_params)
     if return_params:
@@ -72,7 +72,7 @@ def sgdupdate1(sgd, param, grad):
     return param - lr * grad
 
 def sgdupdate(sgd, params, grads):
-    return tree_map(lambda param, grad: sgdupdate1(sgd, param, grad), params, grads) 
+    return tree_map(lambda param, grad: sgdupdate1(sgd, param, grad), params, grads)
 
 def sgdsolve(sgd, model, X, y, nstep=10, print_every=None):
     (fwd, params) = model
@@ -83,7 +83,7 @@ def sgdsolve(sgd, model, X, y, nstep=10, print_every=None):
         ypreds = fwd(params, X)
         lossval = (ypreds - y).square().mean()
         return lossval
-    
+
     loss_and_grad_fn = mx.value_and_grad(mse)
 
     # @mx.compile
@@ -113,7 +113,7 @@ def sgdsolve(sgd, model, X, y, nstep=10, print_every=None):
 class MyAdam(TypedDict):
     ...
 
-# TODO 
+# TODO
 def adamnew():
     ...
 
@@ -125,15 +125,15 @@ def adamupdate():
 
 # TODO: Support bias
 class RNNCell(TypedDict):
-    wx: Array 
-    wh: Array 
+    wx: Array
+    wh: Array
 
 def rnncellnew(input_dim, hidden_dim) -> RNNCell:
     assert hidden_dim == 1
 
     # TODO: fix the output dim of wx
     wx = 1e-2 * mx.random.normal(shape=(input_dim,)) # TODO: Use better init
-    wh = 1e-2 * mx.random.normal(shape=(hidden_dim, hidden_dim)) 
+    wh = 1e-2 * mx.random.normal(shape=(hidden_dim, hidden_dim))
     return RNNCell(wx=wx, wh=wh)
 
 def rnncellinit(cell, wx, wh):
