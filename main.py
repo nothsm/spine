@@ -1,7 +1,7 @@
 import math
 import time
 from functools import partial
-from typing import Any, TypedDict 
+from typing import Any, TypedDict
 
 import mlx.core as mx
 from mlx.utils import tree_map
@@ -11,7 +11,7 @@ import numpy.typing as npt
 
 # -------------------------------- type alias ----------------------------------
 
-Array = mx.array 
+Array = mx.array
 NPArray = npt.NDArray[Any] # TODO: tighten this
 Dataset = tuple[NPArray, NPArray, NPArray, NPArray]
 
@@ -43,7 +43,7 @@ def load_regression(ntrain=32, ntest=8, input_dim=2, return_params=False):
         return X_train, y_train, X_test, y_test, true_params
     else:
         return X_train, y_train, X_test, y_test
-    
+
 def load_tanh(ntrain=32, ntest=8, input_dim=2, return_params=False):
     tmp = load_regression(ntrain=ntrain, ntest=ntest, input_dim=input_dim, return_params=return_params)
     if return_params:
@@ -74,7 +74,7 @@ def sgdupdate1(sgd, param, grad):
     return param - lr * grad
 
 def sgdupdate(sgd: MySGD, params, grads):
-    return tree_map(lambda param, grad: sgdupdate1(sgd, param, grad), params, grads) 
+    return tree_map(lambda param, grad: sgdupdate1(sgd, param, grad), params, grads)
 
 def sgdsolve(sgd, model, X, y, batch_size, n_epochs=10, print_every=None):
     (fwd, params) = model
@@ -85,7 +85,7 @@ def sgdsolve(sgd, model, X, y, batch_size, n_epochs=10, print_every=None):
         ypreds = fwd(params, X)
         lossval = (ypreds - y).square().mean()
         return lossval
-    
+
     loss_and_grad_fn = mx.value_and_grad(mse)
 
     @mx.compile
@@ -93,14 +93,14 @@ def sgdsolve(sgd, model, X, y, batch_size, n_epochs=10, print_every=None):
         loss, grads = loss_and_grad_fn(params, X, y)
         params = sgdupdate(sgd, params, grads)
         return params, loss
-    
+
     def batch_iterate(batch_size, X, y):
         perm = mx.array(np.random.permutation(y.size))
         for i in range(0, y.size, batch_size):
             ixs = perm[i:i + batch_size]
             yield X[ixs], y[ixs]
 
-    steps, metrics = 0, [] 
+    steps, metrics = 0, []
     for e in range(n_epochs): # TODO: increase this
         for X_, y_ in batch_iterate(batch_size, X, y): # TODO: Doesn't this have overhead?
             # train step
@@ -127,7 +127,7 @@ def sgdsolve(sgd, model, X, y, batch_size, n_epochs=10, print_every=None):
 class MyAdam(TypedDict):
     ...
 
-# TODO 
+# TODO
 def adamnew():
     ...
 
@@ -139,14 +139,14 @@ def adamupdate():
 
 # TODO: Support bias
 class RNNCell(TypedDict):
-    wx: Array 
-    wh: Array 
+    wx: Array
+    wh: Array
 
 def rnncellnew(input_dim, hidden_dim) -> RNNCell:
     assert hidden_dim == 1
 
     wx = 1e-2 * mx.random.normal(shape=(input_dim,)) # TODO: Use better init
-    wh = 1e-2 * mx.random.normal(shape=(hidden_dim, hidden_dim)) 
+    wh = 1e-2 * mx.random.normal(shape=(hidden_dim, hidden_dim))
     return RNNCell(wx=wx, wh=wh)
 
 def rnncellinit(cell, wx, wh):
@@ -170,7 +170,7 @@ class RNN(TypedDict):
     cell: RNNCell
 
 def rnnnew(input_dim: int, hidden_dim: int) -> RNN:
-    cell = rnncellnew(input_dim=input_dim, 
+    cell = rnncellnew(input_dim=input_dim,
                       hidden_dim=hidden_dim)
     return RNN(cell=cell)
 
