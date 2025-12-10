@@ -10,6 +10,16 @@ import numpy as np
 import numpy.typing as npt
 from tqdm import tqdm
 
+# -------------------------------- constants ----------------------------------
+
+TSP5_TRAIN_FILE = 'data/tsp/tsp_5_train/tsp5.txt'
+TSP5_TEST_FILE  = 'data/tsp/tsp_5_train/tsp5_test.txt'
+
+TSP10_TRAIN_FILE = 'data/tsp/tsp_10_train/tsp10.txt'
+TSP10_TEST_FILE = 'data/tsp/tsp_10_train/tsp10_test.txt'
+
+TSP50_TRAIN_FILE = 'data/tsp/tsp50.txt'
+
 # -------------------------------- type alias ----------------------------------
 
 Array = mx.array 
@@ -17,13 +27,9 @@ NPArray = npt.NDArray[Any]
 
 # ---------------------------------- datasets ----------------------------------
 
-def load_tsp_data(filepath: str):
-    """Parses TSP data from text file."""
-    if not os.path.exists(filepath):
-        raise FileNotFoundError(f"TSP data file not found: {filepath}")
-
+def load_tsp(file: str) -> tuple[NPArray, NPArray]:
     xs, ys = [], []
-    with open(filepath, 'r') as f:
+    with open(file, 'r') as f:
         for line in f:
             line = line.strip()
             if not line: continue
@@ -42,6 +48,15 @@ def load_tsp_data(filepath: str):
     Y = np.array(ys, dtype=np.int32)
     return X, Y
 
+def load_tsp5() -> tuple[NPArray, NPArray]:
+    return load_tsp(TSP5_TRAIN_FILE)
+
+def load_tsp10() -> tuple[NPArray, NPArray]:
+    return load_tsp(TSP10_TRAIN_FILE)
+
+def load_tsp50() -> tuple[NPArray, NPArray]:
+    return load_tsp(TSP50_TRAIN_FILE)
+
 # ----------------------------- optimizers -----------------------------
 
 class MySGD(TypedDict):
@@ -51,14 +66,9 @@ def sgdnew(lr: float) -> MySGD:
     return MySGD(lr=lr)
 
 def sgdupdate(sgd: MySGD, params, grads):
-    # tree_map recursively applies the update to matching keys in params and grads
     return tree_map(lambda param, grad: param - sgd['lr'] * grad, params, grads) 
 
 def clip_gradients(grads, max_norm: float):
-    """
-    Clips gradients to max_norm. 
-    Manually flattens to ensure we only calculate norm on Arrays.
-    """
     leaves = []
     
     def _extract_arrays(tree):
@@ -77,19 +87,14 @@ def clip_gradients(grads, max_norm: float):
     if not leaves:
         return grads
         
-    # Calculate global L2 norm
     total_norm = mx.sqrt(sum(mx.sum(x**2) for x in leaves))
     
-    # Calculate scaling factor
     clip_coef = max_norm / (total_norm + 1e-6)
     scale = mx.minimum(1.0, clip_coef)
     
-    # Apply scaling to all gradients
     return tree_map(lambda g: g * scale, grads)
 
 # ---------------------------------- models ------------------------------------
-
-# We separate Params (Arrays) from Config (Ints/Bools)
 
 class AttentionConfig(TypedDict):
     dim: int
@@ -97,10 +102,14 @@ class AttentionConfig(TypedDict):
     C: float
 
 class AttentionParams(TypedDict):
-    Wq: Array; bq: Array; We: Array; be: Array; v: Array
+    Wq: Array
+    bq: Array
+    We: Array
+    be: Array
+    v: Array
 
-def attentionnew(dim: int, use_tanh: bool = False, C: float = 10.0) -> Tuple[AttentionParams, AttentionConfig]:
-    bound = 1.0 / math.sqrt(dim)
+def attnnew(dim: int, use_tanh: bool = False, C: float = 10.0) -> tuple[AttentionParams, AttentionConfig]:
+    bound = 1.0 / math.sqrt(dim) # he init
     params = AttentionParams(
         Wq=mx.random.uniform(-bound, bound, shape=(dim, dim)),
         bq=mx.random.uniform(-bound, bound, shape=(dim,)),
@@ -111,7 +120,7 @@ def attentionnew(dim: int, use_tanh: bool = False, C: float = 10.0) -> Tuple[Att
     config = AttentionConfig(dim=dim, use_tanh=use_tanh, C=C)
     return params, config
 
-def attentionfwd(params: AttentionParams, config: AttentionConfig, query: Array, ref: Array):
+def attnfwd(params: AttentionParams, config: AttentionConfig, query: Array, ref: Array):
     q_proj = query @ params['Wq'] + params['bq']
     ref_perm = mx.transpose(ref, (1, 0, 2))
     e = ref_perm @ params['We'] + params['be']
@@ -126,15 +135,17 @@ def attentionfwd(params: AttentionParams, config: AttentionConfig, query: Array,
         logits = config['C'] * mx.tanh(logits)
     return e, logits
 
-# --- LSTM ---
 
 class LSTMParams(TypedDict):
-    Wih: Array; bih: Array; Whh: Array; bhh: Array
+    Wih: Array
+    bih: Array
+    Whh: Array
+    bhh: Array
 
 class LSTMConfig(TypedDict):
     hidden_dim: int
 
-def lstmnew(input_dim: int, hidden_dim: int) -> Tuple[LSTMParams, LSTMConfig]:
+def lstmnew(input_dim: int, hidden_dim: int) -> tuple[LSTMParams, LSTMConfig]:
     scale = 1.0 / math.sqrt(hidden_dim)
     params = LSTMParams(
         Wih=mx.random.uniform(-scale, scale, shape=(input_dim, 4 * hidden_dim)),
@@ -169,16 +180,16 @@ def lstmfwd(params: LSTMParams, config: LSTMConfig, x: Array, state0: tuple[Arra
         hs.append(h)
     return mx.stack(hs), (h, c)
 
-# --- Encoder ---
 
 class EncoderParams(TypedDict):
     lstm: LSTMParams
-    h0: Array; c0: Array
+    h0: Array
+    c0: Array
 
 class EncoderConfig(TypedDict):
     lstm: LSTMConfig
 
-def encodernew(embedding_dim: int, hidden_dim: int) -> Tuple[EncoderParams, EncoderConfig]:
+def encnew(embedding_dim: int, hidden_dim: int) -> tuple[EncoderParams, EncoderConfig]:
     lstm_p, lstm_c = lstmnew(embedding_dim, hidden_dim)
     scale = 1.0 / math.sqrt(hidden_dim)
     params = EncoderParams(
@@ -188,35 +199,33 @@ def encodernew(embedding_dim: int, hidden_dim: int) -> Tuple[EncoderParams, Enco
     )
     return params, EncoderConfig(lstm=lstm_c)
 
-def encoderfwd(params: EncoderParams, config: EncoderConfig, inputs: Array):
+def encfwd(params: EncoderParams, config: EncoderConfig, inputs: Array):
     batch_size = inputs.shape[1]
     h0_batch = mx.repeat(params['h0'], batch_size, axis=0)
     c0_batch = mx.repeat(params['c0'], batch_size, axis=0)
     return lstmfwd(params['lstm'], config['lstm'], inputs, (h0_batch, c0_batch))
 
-# --- Decoder ---
 
 class DecoderParams(TypedDict):
-    Wi: Array; bi: Array; Wh: Array; bh: Array
+    Wi: Array
+    bi: Array
+    Wh: Array
+    bh: Array
     pointer: AttentionParams
     glimpse: AttentionParams
 
 class DecoderConfig(TypedDict):
     pointer: AttentionConfig
     glimpse: AttentionConfig
-    max_length: int; n_glimpses: int
+    max_length: int
+    n_glimpses: int
 
-def decodernew(embedding_dim: int, hidden_dim: int, max_length: int, 
+def decnew(embedding_dim: int, hidden_dim: int, max_length: int, 
                tanh_exploration: float = 10.0, use_tanh: bool = True, n_glimpses: int = 1):
     scale = 1.0 / math.sqrt(hidden_dim)
     
-    # OLD CODE:
-    # pt_p, pt_c = attentionnew(hidden_dim, use_tanh=use_tanh, C=tanh_exploration)
-    # gl_p, gl_c = attentionnew(hidden_dim, use_tanh=False) 
-
-    # NEW CODE: Use the same tanh/C settings for glimpse as for the pointer
-    pt_p, pt_c = attentionnew(hidden_dim, use_tanh=use_tanh, C=tanh_exploration)
-    gl_p, gl_c = attentionnew(hidden_dim, use_tanh=use_tanh, C=tanh_exploration)
+    pt_p, pt_c = attnnew(hidden_dim, use_tanh=use_tanh, C=tanh_exploration)
+    gl_p, gl_c = attnnew(hidden_dim, use_tanh=use_tanh, C=tanh_exploration)
     
     params = DecoderParams(
         Wi=mx.random.uniform(-scale, scale, shape=(embedding_dim, 4 * hidden_dim)),
@@ -236,7 +245,7 @@ def _lstm_step_decoder(params: DecoderParams, x: Array, h: Array, c: Array):
     h_next = o * mx.tanh(c_next)
     return h_next, c_next
 
-def decoderfwd(params: DecoderParams, config: DecoderConfig, decoder_input: Array, embedded_inputs: Array, 
+def decfwd(params: DecoderParams, config: DecoderConfig, decoder_input: Array, embedded_inputs: Array, 
                hidden: tuple[Array, Array], context: Array):
     h, c = hidden
     batch_size = context.shape[1]
@@ -250,13 +259,13 @@ def decoderfwd(params: DecoderParams, config: DecoderConfig, decoder_input: Arra
         h, c = _lstm_step_decoder(params, curr_input, h, c)
         g_l = h 
         for _ in range(config['n_glimpses']):
-            _, logits = attentionfwd(params['glimpse'], config['glimpse'], g_l, context)
+            _, logits = attnfwd(params['glimpse'], config['glimpse'], g_l, context)
             logits = mx.where(mask, -1e9, logits)
             probs_glimpse = mx.softmax(logits, axis=1)
             ctx_perm = mx.transpose(context, (1, 0, 2))
             g_l = mx.squeeze(mx.expand_dims(probs_glimpse, 1) @ ctx_perm, axis=1)
 
-        _, logits = attentionfwd(params['pointer'], config['pointer'], g_l, context)
+        _, logits = attnfwd(params['pointer'], config['pointer'], g_l, context)
         logits = mx.where(mask, -1e9, logits)
         probs = mx.softmax(logits, axis=1)
         
@@ -276,7 +285,6 @@ def decoderfwd(params: DecoderParams, config: DecoderConfig, decoder_input: Arra
         selections.append(selected_idxs)
     return outputs, selections
 
-# --- PointerNetwork ---
 
 class PtrNetParams(TypedDict):
     encoder: EncoderParams
@@ -287,23 +295,22 @@ class PtrNetConfig(TypedDict):
     encoder: EncoderConfig
     decoder: DecoderConfig
 
-def pointernetworknew(embedding_dim: int, hidden_dim: int, max_decoding_len: int,
+def ptrnetnew(embedding_dim: int, hidden_dim: int, max_decoding_len: int,
                       n_glimpses: int = 1, tanh_exploration: float = 10.0, use_tanh: bool = True):
-    enc_p, enc_c = encodernew(embedding_dim, hidden_dim)
-    dec_p, dec_c = decodernew(embedding_dim, hidden_dim, max_decoding_len, tanh_exploration, use_tanh, n_glimpses)
+    enc_p, enc_c = encnew(embedding_dim, hidden_dim)
+    dec_p, dec_c = decnew(embedding_dim, hidden_dim, max_decoding_len, tanh_exploration, use_tanh, n_glimpses)
     scale = 1.0 / math.sqrt(embedding_dim)
     params = PtrNetParams(encoder=enc_p, decoder=dec_p, decoder_in_0=mx.random.uniform(-scale, scale, shape=(embedding_dim,)))
     config = PtrNetConfig(encoder=enc_c, decoder=dec_c)
     return params, config
 
-def pointernetworkfwd(params: PtrNetParams, config: PtrNetConfig, inputs: Array):
+def ptrnetfwd(params: PtrNetParams, config: PtrNetConfig, inputs: Array):
     batch_size = inputs.shape[1]
-    enc_h, (hn, cn) = encoderfwd(params['encoder'], config['encoder'], inputs)
+    enc_h, (hn, cn) = encfwd(params['encoder'], config['encoder'], inputs)
     decoder_input = mx.repeat(mx.expand_dims(params['decoder_in_0'], 0), batch_size, axis=0)
-    probs, idxs = decoderfwd(params['decoder'], config['decoder'], decoder_input, inputs, (hn, cn), enc_h)
+    probs, idxs = decfwd(params['decoder'], config['decoder'], decoder_input, inputs, (hn, cn), enc_h)
     return probs, idxs
 
-# --- NCO ---
 
 class NCOParams(TypedDict):
     actor: PtrNetParams
@@ -316,7 +323,7 @@ class NCOConfig(TypedDict):
 
 def nconew(input_dim: int, embedding_dim: int, hidden_dim: int, max_decoding_len: int,
            n_glimpses: int = 1, tanh_exploration: float = 10.0, use_tanh: bool = True, alpha: float = 0.9):
-    actor_p, actor_c = pointernetworknew(embedding_dim, hidden_dim, max_decoding_len, n_glimpses, tanh_exploration, use_tanh)
+    actor_p, actor_c = ptrnetnew(embedding_dim, hidden_dim, max_decoding_len, n_glimpses, tanh_exploration, use_tanh)
     scale = 1.0 / math.sqrt(embedding_dim)
     params = NCOParams(
         actor=actor_p,
@@ -332,7 +339,7 @@ def ncofwd(params: NCOParams, config: NCOConfig, inputs: Array, objective_fn: ca
     embedded_inputs_batch = inputs_transposed @ params['W_embed']
     embedded_inputs_pnet = mx.transpose(embedded_inputs_batch, (1, 0, 2))
     
-    probs_list, idxs_list = pointernetworkfwd(params['actor'], config['actor'], embedded_inputs_pnet)
+    probs_list, idxs_list = ptrnetfwd(params['actor'], config['actor'], embedded_inputs_pnet)
     
     actions = []
     for idxs in idxs_list:
@@ -355,27 +362,20 @@ def ncofwd(params: NCOParams, config: NCOConfig, inputs: Array, objective_fn: ca
 
 # ---------------------------------- Training ----------------------------------
 
-def train(train_data: np.ndarray | None = None, n_epochs: int = 2):
-    # Data Setup
+def train(train_data, n_epochs: int = 2):
     task = 'tsp'
-    if train_data is not None:
-        n_train_samples = train_data.shape[0]
-        n_cities = train_data.shape[2]
-        print(f"Using provided data: {n_train_samples} samples, {n_cities} cities.")
-    else:
-        n_cities = 5
-        n_train_samples = 10_000 
-        print(f"Using random data: {n_train_samples} samples, {n_cities} cities.")
+    n_train_samples = train_data.shape[0]
+    n_cities = train_data.shape[2]
+    print(f"Using provided data: {n_train_samples} samples, {n_cities} cities.")
 
     batch_size = 32
-    learning_rate = 1e-4 # Decreased LR for stability
+    learning_rate = 1e-4
     embed_dim = 128
     hidden_dim = 128
     n_glimpses = 1
     
-    print(f"Starting training for {task}_{n_cities} using MySGD...")
+    print(f"Starting training for {task}_{n_cities} using SGD...")
     
-    # 1. Initialize Model (Split into Params and Config)
     params, config = nconew(
         input_dim=2,
         embedding_dim=embed_dim,
@@ -389,7 +389,6 @@ def train(train_data: np.ndarray | None = None, n_epochs: int = 2):
     
     optimizer = sgdnew(lr=learning_rate)
     
-    # 3. Define Loss Function
     def loss_fn(params, inputs):
         def tour_length(actions):
             dist = mx.zeros((inputs.shape[0],))
@@ -407,7 +406,7 @@ def train(train_data: np.ndarray | None = None, n_epochs: int = 2):
         
         log_prob_sum = mx.zeros((inputs.shape[0],))
         for p in probs:
-            p = mx.maximum(p, 1e-8) # Epsilon to prevent NaN in log
+            p = mx.maximum(p, 1e-8) # prevent NaN
             log_prob_sum = log_prob_sum + mx.log(p)
             
         loss = mx.mean(advantage * log_prob_sum)
@@ -415,17 +414,15 @@ def train(train_data: np.ndarray | None = None, n_epochs: int = 2):
 
     loss_and_grad_fn = mx.value_and_grad(loss_fn)
 
-    # 4. Compile Step
     @partial(mx.compile, inputs=mx.random.state, outputs=mx.random.state)
     def step(params, optimizer, inputs):
         (loss, tour_lens), grads = loss_and_grad_fn(params, inputs)
         
-        # Clip Gradients with fixed function
         grads = clip_gradients(grads, max_norm=1.0)
         
         new_params = sgdupdate(optimizer, params, grads)
         
-        # Manually update baseline
+        # baseline update 
         mean_reward = mx.mean(tour_lens)
         alpha = new_params['alpha']
         current_baseline = new_params['baseline']
@@ -434,12 +431,7 @@ def train(train_data: np.ndarray | None = None, n_epochs: int = 2):
         
         return new_params, loss, mean_reward
 
-    # 5. Training Loop
-    if train_data is None:
-        print("Generating Random Training Data...")
-        X_train = np.random.uniform(0, 1, size=(n_train_samples, 2, n_cities)).astype(np.float32)
-    else:
-        X_train = train_data.astype(np.float32)
+    X_train = train_data.astype(np.float32)
     
     for epoch in range(n_epochs):
         print(f"\n--- Epoch {epoch + 1}/{n_epochs} ---")
@@ -471,14 +463,16 @@ def train(train_data: np.ndarray | None = None, n_epochs: int = 2):
     return params
 
 if __name__ == "__main__":
-    TSP5_FILE_PATH = 'data/tsp/tsp_5_train/tsp5.txt'
-    try:
-        if os.path.exists(TSP5_FILE_PATH):
-            X_file, Y_file = load_tsp_data(TSP5_FILE_PATH)
-            train(train_data=X_file)
-        else:
-            print(f"File not found: {TSP5_FILE_PATH}, using random data.")
-            train(train_data=None)
-    except Exception as e:
-        print(f"Error: {e}. Falling back.")
-        train(train_data=None)
+    np.random.seed(123)
+    mx.random.seed(123)
+
+    n_cities = input('Please enter how many cities to train on (5 or 10): ').strip()
+    if n_cities == '5':
+        file = TSP5_TRAIN_FILE
+    elif n_cities == '10':
+        file = TSP10_TRAIN_FILE
+    else:
+        raise NotImplementedError(f"Training on {n_cities} is not supported")
+
+    X, Y = load_tsp(file)
+    train(train_data=X)
