@@ -12,4 +12,5 @@ dependencies = [
     "numpy>=2.3.4",
     "scipy>=1.16.3",
     "sympy>=1.14.0",
+    "tqdm>=4.67.1",
 ]

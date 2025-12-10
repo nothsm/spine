@@ -20,6 +20,18 @@ Dataset = tuple[NPArray, NPArray, NPArray, NPArray]
 def load_bixor(n_samples: int = 32):
     ...
 
+# TODO
+def load_xor():
+    ...
+
+# TODO
+def load_tsp5():
+    ...
+
+# TODO
+def load_tsp10():
+    ...
+
 # TODO: Return a dict here?
 def load_donut(n_train: int = 32, n_test: int = 8, r: float = 0.5) -> Dataset:
     X_train = np.random.uniform(-1, 1, size=(n_train, 2))
@@ -118,8 +130,6 @@ def sgdsolve(sgd, model, X, y, batch_size, n_epochs=10, print_every=None):
             metrics.append({'loss': step_loss, 'dt': step_dt})
             if print_every and (steps % print_every) == 0:
                 print(f"step: {steps} | epoch: {e} | loss: {step_loss:.5f} | dt: {step_dt}ns")
-    # metrics.update({'losses': [metric['loss'] for metric in metrics],
-    #                 'dts': [metric['dt'] for metric in metrics]})
     return params, metrics
 
 
@@ -156,15 +166,9 @@ def rnncellinit(cell, wx, wh):
 # Note: If any of the entries is large, tanh makes it go to 1
 def rnncellfwd(cell, xt, hprev=None):
     wx, wh = cell['wx'], cell['wh']
-
     hprev = hprev or mx.zeros(wh.shape[0]) # TODO: how does this interact with compilation?
-
     ht = mx.tanh(mx.matmul(xt, wx) + mx.matmul(hprev, wh)) # TODO: Why are the matmuls transposed?
     return ht
-
-# TODO
-def rnncellbwd(cell, dht, cache):
-    ...
 
 class RNN(TypedDict):
     cell: RNNCell
@@ -179,17 +183,17 @@ def rnnfwd(rnn: RNN, xs, h0):
     y, h = ...
     return y, h
 
-# TODO
-class MyDataset(TypedDict):
-    ...
+# # TODO
+# class MyDataset(TypedDict):
+#     ...
 
-# TODO
-class MyDataLoader(TypedDict):
-    ...
+# # TODO
+# class MyDataLoader(TypedDict):
+#     ...
 
-# TODO
-class MyLRScheduler(TypedDict):
-    ...
+# # TODO
+# class MyLRScheduler(TypedDict):
+#     ...
 
 # TODO
 class RNNEncoder(TypedDict):
@@ -258,3 +262,4 @@ if __name__ == "__main__":
 # - [ ] How does the Python object system work?
 # - [ ] Try generating data from a different distribution than U([0, 1]^2)
 # - [ ] Fun: pure C implementation
+# - [ ] only do stochastic decoding
