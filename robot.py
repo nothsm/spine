@@ -25,6 +25,34 @@ TSP50_TRAIN_FILE = 'data/tsp/tsp50.txt'
 Array = mx.array 
 NPArray = npt.NDArray[Any]
 
+# ----------------------------------- utils ------------------------------------
+
+def gradclip(grads, max_norm: float):
+    leaves = []
+    
+    def _extract_arrays(tree):
+        if isinstance(tree, mx.array):
+            leaves.append(tree)
+        elif isinstance(tree, dict):
+            for v in tree.values():
+                _extract_arrays(v)
+        elif isinstance(tree, (list, tuple)):
+            for v in tree:
+                _extract_arrays(v)
+        # Ignore None, scalars, etc.
+    
+    _extract_arrays(grads)
+    
+    if not leaves:
+        return grads
+        
+    total_norm = mx.sqrt(sum(mx.sum(x**2) for x in leaves))
+    
+    clip_coef = max_norm / (total_norm + 1e-6)
+    scale = mx.minimum(1.0, clip_coef)
+    
+    return tree_map(lambda g: g * scale, grads)
+
 # ---------------------------------- datasets ----------------------------------
 
 def load_tsp(file: str) -> tuple[NPArray, NPArray]:
@@ -67,32 +95,6 @@ def sgdnew(lr: float) -> MySGD:
 
 def sgdupdate(sgd: MySGD, params, grads):
     return tree_map(lambda param, grad: param - sgd['lr'] * grad, params, grads) 
-
-def clip_gradients(grads, max_norm: float):
-    leaves = []
-    
-    def _extract_arrays(tree):
-        if isinstance(tree, mx.array):
-            leaves.append(tree)
-        elif isinstance(tree, dict):
-            for v in tree.values():
-                _extract_arrays(v)
-        elif isinstance(tree, (list, tuple)):
-            for v in tree:
-                _extract_arrays(v)
-        # Ignore None, scalars, etc.
-    
-    _extract_arrays(grads)
-    
-    if not leaves:
-        return grads
-        
-    total_norm = mx.sqrt(sum(mx.sum(x**2) for x in leaves))
-    
-    clip_coef = max_norm / (total_norm + 1e-6)
-    scale = mx.minimum(1.0, clip_coef)
-    
-    return tree_map(lambda g: g * scale, grads)
 
 # ---------------------------------- models ------------------------------------
 
@@ -418,7 +420,7 @@ def train(train_data, n_epochs: int = 2):
     def step(params, optimizer, inputs):
         (loss, tour_lens), grads = loss_and_grad_fn(params, inputs)
         
-        grads = clip_gradients(grads, max_norm=1.0)
+        grads = gradclip(grads, max_norm=1.0)
         
         new_params = sgdupdate(optimizer, params, grads)
         
