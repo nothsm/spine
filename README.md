@@ -6,6 +6,6 @@ The simulated annealing experiments are in the `tsp-sa-110625.iypnb` Jupyter not
 
 The training code for the neural networks are in `robot.py.`
 
-The datasets are in `data/tsp`, with Google drive links in `data/tsp/links.txt` to download the datasets.
+The datasets are in `data/tsp`, with Google drive links in `data/links.txt` to download the datasets.
 
 All baseline code for the classical solvers are in the `baselines/` folder.

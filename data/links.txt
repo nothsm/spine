@@ -1,0 +1,7 @@
+tsp5_train.zip: https://drive.usercontent.google.com/download?id=0B2fg8yPGn2TCSW1pNTJMXzFPYTg&export=download&authuser=0
+tsp10_train.zip: https://drive.usercontent.google.com/download?id=0B2fg8yPGn2TCbHowM0hfOTJCNkU&export=download&authuser=0
+tsp5-20_train.zip: https://drive.usercontent.google.com/download?id=0B2fg8yPGn2TCTWNxX21jTDBGeXc&export=download&authuser=0
+tsp50_train.zip: https://drive.usercontent.google.com/download?id=0B2fg8yPGn2TCaVQxSl9ab29QajA&export=download&authuser=0
+tsp20_test.txt: https://drive.usercontent.google.com/download?id=0B2fg8yPGn2TCdF9TUU5DZVNCNjQ&export=download&authuser=0
+tsp40_test.txt: https://drive.usercontent.google.com/download?id=0B2fg8yPGn2TCcjFrYk85SGFVNlU&export=download&authuser=0
+tsp50_test.txt.zip: https://drive.usercontent.google.com/download?id=0B2fg8yPGn2TCUVlCQmQtelpZTTQ&export=download&authuser=0
