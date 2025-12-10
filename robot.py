@@ -2,7 +2,7 @@ import math
 import time
 import os
 from functools import partial
-from typing import Any, TypedDict, List, Tuple, Callable
+from typing import Any, TypedDict
 
 import mlx.core as mx
 from mlx.utils import tree_map
@@ -434,7 +434,8 @@ def train(train_data, n_epochs: int = 2):
         return new_params, loss, mean_reward
 
     X_train = train_data.astype(np.float32)
-    
+
+    tic = time.time() 
     for epoch in range(n_epochs):
         print(f"\n--- Epoch {epoch + 1}/{n_epochs} ---")
         indices = np.random.permutation(n_train_samples)
@@ -461,7 +462,9 @@ def train(train_data, n_epochs: int = 2):
         print(f"Epoch {epoch + 1} Stats -> Loss: {epoch_loss/n_batches:.4f} | Avg Tour Length: {epoch_len/n_batches:.4f}")
         print(f"Baseline: {params['baseline'].item():.4f}")
 
+    toc = time.time()
     print("Training Finished.")
+    print(f"Training time (s): {toc - tic}")
     return params
 
 if __name__ == "__main__":
