@@ -11,6 +11,7 @@ Data format: "x1 y1 x2 y2 ... xn yn output tour1 tour2 ... tourn tour1"
 """
 
 import math
+import time
 from typing import List, Tuple, Optional, Dict, Any
 import numpy as np
 import numpy.typing as npt
@@ -412,7 +413,8 @@ def evaluate_baselines(
     supervised_model: Optional[Any] = None,
     progress: bool = True,
     ortools_time_limit: int = 5,
-    ortools_fast_mode: bool = True
+    ortools_fast_mode: bool = True,
+    measure_time: bool = False
 ) -> Dict[str, Dict[str, float]]:
     """
     Big evaluation function to evaluate ALL baseline methods on dataset.
@@ -424,6 +426,7 @@ def evaluate_baselines(
         progress: true -> print progress
         ortools_time_limit: time limit per instance for OR-Tools (default: 5s for speed)
         ortools_fast_mode: use faster OR-Tools strategy (default: True)
+        measure_time: if True, measure execution time for each method
 
     Returns:
         Dictionary with results for each method, structured as:
@@ -432,7 +435,8 @@ def evaluate_baselines(
                 'avg_length': float,
                 'avg_gap': float,  # % from Concorde 'optimal'
                 'avg_ratio': float,  # ratio to Concorde 'optimal' length
-                'success_rate': float  # % of successfully solved instances -> for debug, can remove
+                'success_rate': float,  # % of successfully solved instances -> for debug, can remove
+                'avg_time': float  # average time per instance (if measure_time=True)
             }
         }
     """
@@ -448,7 +452,7 @@ def evaluate_baselines(
             methods.append('concorde')
         methods.append('dataset_output')
 
-    results = {method: {'lengths': [], 'gaps': [], 'ratios': [], 'successes': []}
+    results = {method: {'lengths': [], 'gaps': [], 'ratios': [], 'successes': [], 'times': []}
                for method in methods}
 
     for i, (coords, dataset_tour) in enumerate(test_data):
@@ -471,6 +475,8 @@ def evaluate_baselines(
         # actually run all methods!
         for method in methods:
             try:
+                start_time = time.perf_counter() if measure_time else None
+                
                 if method == 'supervised':
                     if supervised_model is None:
                         continue
@@ -492,6 +498,8 @@ def evaluate_baselines(
                 else:
                     continue
 
+                elapsed_time = time.perf_counter() - start_time if measure_time and start_time is not None else None
+
                 if success and length is not None:
                     gap = ((length - reference_length) / reference_length) * 100
                     ratio = length / reference_length
@@ -500,8 +508,12 @@ def evaluate_baselines(
                     results[method]['gaps'].append(gap)
                     results[method]['ratios'].append(ratio)
                     results[method]['successes'].append(1)
+                    if elapsed_time is not None:
+                        results[method]['times'].append(elapsed_time)
                 else:
                     results[method]['successes'].append(0)
+                    if elapsed_time is not None:
+                        results[method]['times'].append(0)
 
             except Exception as e:
                 if progress:
@@ -520,6 +532,8 @@ def evaluate_baselines(
                 'avg_ratio': np.mean(results[method]['ratios']),
                 'success_rate': np.mean(results[method]['successes'])
             }
+            if measure_time and len(results[method]['times']) > 0:
+                summary[method]['avg_time'] = np.mean(results[method]['times'])
         else:
             summary[method] = {
                 'avg_length': float('nan'),
@@ -527,6 +541,8 @@ def evaluate_baselines(
                 'avg_ratio': float('nan'),
                 'success_rate': 0.0
             }
+            if measure_time:
+                summary[method]['avg_time'] = float('nan')
 
     return summary
 
