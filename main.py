@@ -44,8 +44,8 @@ def load_regression(ntrain=32, ntest=8, input_dim=2, return_params=False):
     else:
         return X_train, y_train, X_test, y_test
     
-def load_tanh(ntrain=32, ntest=8, input_dim=2, return_params=False):
-    tmp = load_regression(ntrain=ntrain, ntest=ntest, input_dim=input_dim, return_params=return_params)
+def load_tanh(n_train=32, ntest=8, input_dim=2, return_params=False):
+    tmp = load_regression(ntrain=n_train, ntest=ntest, input_dim=input_dim, return_params=return_params)
     if return_params:
         X_train, y_train, X_test, y_test, true_params = tmp
         y_train = np.tanh(y_train)
