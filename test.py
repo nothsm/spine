@@ -5,6 +5,16 @@ import numpy as np
 
 from main import *
 
+ANSI_COLOR_RED = "\x1b[31m"
+ANSI_COLOR_GREEN = "\x1b[32m"
+ANSI_COLOR_BLUE = "\x1b[36m"
+ANSI_COLOR_RESET = "\x1b[0m"
+ANSI_BOLD = "\x1b[1m"
+ANSI_ITALIC = "\x1b[3m"
+ANSI_FG = "\x1b[38;5;11m"
+
+PASS = "pass"
+FAIL = "fail!!!"
 
 def sgdupdate_basic():
     sgd = sgdnew(lr=1e-1) # lr=0.1
@@ -59,18 +69,17 @@ def sgdupdate_nested():
     assert np.allclose(params['w1'], np.array([0.2, 0.1]))
     assert np.allclose(params['b'], np.array([0.3]))
 
-def rnncellfwd_basic():
+def rcfwd_basic():
     np.random.seed(546)
 
-    cell = rnncellnew(2, 3)
-    # wx, wh = cell['wx'], cell['wh']
+    cell = rcnew(2, 3)
 
     wx = mx.array([[-0.06553868,  0.40492537,  1.05272082],
                    [-0.01006521,  2.69813824, -0.00936148]])
     wh = mx.array([[-0.03541319,  0.97702002, -0.14594773],
                    [-1.17679928, -0.59678869, -0.12321351],
                    [1.06107138,  2.07162012, -0.08470909]])
-    rnncellinit(cell, wx, wh)
+    rcinit(cell, wx, wh)
     assert mx.allclose(cell['wx'], mx.array([[-0.06553868,  0.40492537,  1.05272082],
                                              [-0.01006521,  2.69813824, -0.00936148]]))
     assert mx.allclose(cell['wh'], mx.array([[-0.03541319,  0.97702002, -0.14594773],
@@ -79,8 +88,28 @@ def rnncellfwd_basic():
     xt = mx.array([1., 2.])
     hprev = mx.array([3., 4., 5.])
 
-    ht = rnncellfwd(cell, xt, hprev)
+    ht = rcfwd(cell, xt, hprev)
     assert mx.allclose(ht, mx.array([0.38528493,  1., -0.30972828]))
+
+def rcclassify_basic():
+    np.random.seed(546)
+
+    cell = rcnew(2, 3)
+
+    wx = mx.array([[-0.06553868,  0.40492537,  1.05272082],
+                   [-0.01006521,  2.69813824, -0.00936148]])
+    wh = mx.array([0.5])
+    rcinit(cell, wx, wh)
+    assert mx.allclose(cell['wx'], mx.array([[-0.06553868,  0.40492537,  1.05272082],
+                                             [-0.01006521,  2.69813824, -0.00936148]]))
+    assert mx.allclose(cell['wh'], mx.array([0.5]))
+    xt = mx.array([1., 2.])
+    hprev = mx.array([3.])
+
+    preds = rcclassify(cell, xt, hprev)
+
+    assert False
+    # assert mx.allclose(ht, mx.array([0.38528493,  1., -0.30972828]))
 
 # use seq of length 3 and h0 = [0, 0, 1]
 def rnnfwd_basic():
@@ -89,7 +118,8 @@ def rnnfwd_basic():
 TESTS = [
     ("sgdupdate_basic", sgdupdate_basic),
     ("sgdupdate_nested", sgdupdate_nested),
-    ("rnncell_basic", rnncellfwd_basic),
+    ("rcfwd_basic", rcfwd_basic),
+    ("rcclassify_basic", rcclassify_basic),
     ("rnnfwd_basic", rnnfwd_basic)
 ]
 
@@ -100,11 +130,10 @@ def main():
         try:
             test()
             npass += 1
-            print(f"{testname} - pass")
+            print(f"{testname} - {ANSI_COLOR_BLUE}{PASS}{ANSI_COLOR_RESET}")
         except AssertionError as e:
-            print(f"{testname} - fail!!!")
+            print(f"{testname} - {ANSI_COLOR_RED}{FAIL}{ANSI_COLOR_RESET}")
     print(f"{npass}/{len(TESTS)} tests pass")
-
     
 
 if __name__ == '__main__':
